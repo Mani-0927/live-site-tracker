@@ -1,0 +1,141 @@
+{
+  "name": "WF3 - Frontend Data API (Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "dashboard-data",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "91020216-f047-46ec-b32f-6257a37b5944",
+      "name": "Dashboard Data Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "b39f519e-7666-44b6-bc65-df184950cde2"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1xtVqfy0ffZ-an9x4412hveXRs3ROmy5xB9UAj0VK3XM",
+          "mode": "list",
+          "cachedResultName": "Untitled spreadsheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1xtVqfy0ffZ-an9x4412hveXRs3ROmy5xB9UAj0VK3XM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 864611480,
+          "mode": "list",
+          "cachedResultName": "Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1xtVqfy0ffZ-an9x4412hveXRs3ROmy5xB9UAj0VK3XM/edit#gid=864611480"
+        },
+        "options": {}
+      },
+      "id": "3662185b-3732-4710-9440-f91a161ef868",
+      "name": "Read Data Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Cnz5dH1KLa2hZXdH",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the API response: latest N rows sorted by timestamp desc.\nconst N = 50;\n\n// Drop empty-json items (alwaysOutputData emits one {} item when the sheet is empty).\nconst rows = $input.all()\n  .map((i) => i.json)\n  .filter((r) => r && Object.keys(r).length > 0);\n\nconst shaped = rows.map((r) => ({\n  timestamp: r.timestamp ?? null,\n  source_url: r.source_url ?? null,\n  field_name: r.field_name ?? null,\n  value: r.value ?? null,\n  ai_summary: r.ai_summary ?? null,\n  status: r.status ?? null,\n}));\n\n// Sort by timestamp descending (ISO strings sort lexicographically).\nshaped.sort((a, b) => {\n  const ta = a.timestamp || '';\n  const tb = b.timestamp || '';\n  if (ta < tb) return 1;\n  if (ta > tb) return -1;\n  return 0;\n});\n\nconst latest = shaped.slice(0, N);\n\n// Return a single item carrying the array so the Respond node can output it as JSON.\nreturn [{ json: { rows: latest } }];"
+      },
+      "id": "c5d09742-694d-4265-a4ef-58c4fdccb6f5",
+      "name": "Shape Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.rows }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "e52fecbd-1505-4953-abc2-6a627c655452",
+      "name": "Respond With Rows",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Dashboard Data Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read Data Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Data Sheet": {
+      "main": [
+        [
+          {
+            "node": "Shape Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Payload": {
+      "main": [
+        [
+          {
+            "node": "Respond With Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6b47ac8d-5cc1-4fe6-a867-5cb9a7f7082d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6b864d39b69410180045409484eb2e0a549c5f5ed0e05123c80cae54f618e128"
+  },
+  "nodeGroups": [],
+  "id": "B5VjLW4RegkclI9T",
+  "tags": []
+}

@@ -1,0 +1,147 @@
+{
+  "name": "WF4 - Weekly Summary Report (HTML Email)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "5f068508-ed60-4901-9656-814eed83da0f",
+      "name": "Every Monday 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1xtVqfy0ffZ-an9x4412hveXRs3ROmy5xB9UAj0VK3XM",
+          "mode": "list",
+          "cachedResultName": "Untitled spreadsheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1xtVqfy0ffZ-an9x4412hveXRs3ROmy5xB9UAj0VK3XM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1427464731,
+          "mode": "list",
+          "cachedResultName": "History",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1xtVqfy0ffZ-an9x4412hveXRs3ROmy5xB9UAj0VK3XM/edit#gid=1427464731"
+        },
+        "options": {}
+      },
+      "id": "53866590-d8f0-4259-ab7f-f993a9c5c82c",
+      "name": "Read History Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Cnz5dH1KLa2hZXdH",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate the last 7 days of History rows and build an HTML report.\nconst now = new Date();\nconst cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\n\n// Drop empty-json items (alwaysOutputData emits one {} item when the sheet is empty).\nconst allRows = $input.all()\n  .map((i) => i.json)\n  .filter((r) => r && Object.keys(r).length > 0);\n\n// Filter to the last 7 days by timestamp.\nconst recent = allRows.filter((r) => {\n  if (!r.timestamp) return false;\n  const t = new Date(r.timestamp);\n  if (isNaN(t.getTime())) return false;\n  return t >= cutoff;\n});\n\nconst dateLabel = now.toISOString().slice(0, 10);\n\n// No data in the past week -> brief no-changes email.\nif (recent.length === 0) {\n  const emptyHtml =\n    '<div style=\"font-family:Arial,sans-serif;color:#333;\">' +\n    '<h2>Weekly Scrape Summary — ' + dateLabel + '</h2>' +\n    '<p>No changes recorded this week.</p>' +\n    '</div>';\n  return [{ json: { hasData: false, dateLabel, html: emptyHtml } }];\n}\n\n// Group per source_url + field_name.\nconst groups = {};\nfor (const r of recent) {\n  const key = (r.source_url || '') + '||' + (r.field_name || '');\n  if (!groups[key]) {\n    groups[key] = {\n      source_url: r.source_url || '',\n      field_name: r.field_name || '',\n      changes: 0,\n      latestValue: null,\n      latestTs: '',\n      latestSummary: '',\n      numericValues: [],\n    };\n  }\n  const g = groups[key];\n  g.changes += 1;\n\n  const ts = r.timestamp || '';\n  if (ts >= g.latestTs) {\n    g.latestTs = ts;\n    g.latestValue = r.value;\n    g.latestSummary = r.ai_summary || '';\n  }\n\n  const num = typeof r.value === 'number' ? r.value : parseFloat(String(r.value).replace(/[^0-9.\\-]/g, ''));\n  if (!isNaN(num) && String(r.value).trim() !== '') {\n    g.numericValues.push(num);\n  }\n}\n\nconst aggregates = Object.keys(groups).map((k) => {\n  const g = groups[k];\n  const isNumeric = g.numericValues.length > 0;\n  return {\n    source_url: g.source_url,\n    field_name: g.field_name,\n    changes: g.changes,\n    latestValue: g.latestValue,\n    min: isNumeric ? Math.min(...g.numericValues) : '',\n    max: isNumeric ? Math.max(...g.numericValues) : '',\n    latestSummary: g.latestSummary,\n  };\n});\n\n// Build HTML table.\nlet rowsHtml = '';\nfor (const a of aggregates) {\n  rowsHtml +=\n    '<tr>' +\n    '<td style=\"padding:6px;border:1px solid #ddd;\">' + a.source_url + '</td>' +\n    '<td style=\"padding:6px;border:1px solid #ddd;\">' + a.field_name + '</td>' +\n    '<td style=\"padding:6px;border:1px solid #ddd;text-align:center;\">' + a.changes + '</td>' +\n    '<td style=\"padding:6px;border:1px solid #ddd;\">' + (a.latestValue ?? '') + '</td>' +\n    '<td style=\"padding:6px;border:1px solid #ddd;text-align:right;\">' + a.min + '</td>' +\n    '<td style=\"padding:6px;border:1px solid #ddd;text-align:right;\">' + a.max + '</td>' +\n    '<td style=\"padding:6px;border:1px solid #ddd;\">' + a.latestSummary + '</td>' +\n    '</tr>';\n}\n\nconst html =\n  '<div style=\"font-family:Arial,sans-serif;color:#333;\">' +\n  '<h2>Weekly Scrape Summary — ' + dateLabel + '</h2>' +\n  '<p>' + recent.length + ' change(s) recorded across ' + aggregates.length + ' tracked field(s) in the last 7 days.</p>' +\n  '<table style=\"border-collapse:collapse;width:100%;font-size:13px;\">' +\n  '<thead><tr style=\"background:#f2f2f2;\">' +\n  '<th style=\"padding:6px;border:1px solid #ddd;text-align:left;\">Source URL</th>' +\n  '<th style=\"padding:6px;border:1px solid #ddd;text-align:left;\">Field</th>' +\n  '<th style=\"padding:6px;border:1px solid #ddd;\">Changes</th>' +\n  '<th style=\"padding:6px;border:1px solid #ddd;text-align:left;\">Latest Value</th>' +\n  '<th style=\"padding:6px;border:1px solid #ddd;\">Min</th>' +\n  '<th style=\"padding:6px;border:1px solid #ddd;\">Max</th>' +\n  '<th style=\"padding:6px;border:1px solid #ddd;text-align:left;\">Latest AI Summary</th>' +\n  '</tr></thead>' +\n  '<tbody>' + rowsHtml + '</tbody>' +\n  '</table>' +\n  '</div>';\n\nreturn [{ json: { hasData: true, dateLabel, html } }];"
+      },
+      "id": "dda6346c-eed4-496d-a96a-e14163974a37",
+      "name": "Aggregate & Build HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "manisharma7309@gmail.com",
+        "subject": "=Weekly Scrape Summary — {{ $json.dateLabel }}",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "4a9a1df9-16ca-45bf-b2ac-ce59983f919f",
+      "name": "Send Weekly Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        0
+      ],
+      "webhookId": "4ebad3ed-9965-4cf6-9e9b-a867cf5f7808",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "VuvLDkodfQce296Y",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every Monday 08:00": {
+      "main": [
+        [
+          {
+            "node": "Read History Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read History Sheet": {
+      "main": [
+        [
+          {
+            "node": "Aggregate & Build HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate & Build HTML": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "8bc1c776-bd61-41b2-83c8-93a44e0149e3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6b864d39b69410180045409484eb2e0a549c5f5ed0e05123c80cae54f618e128"
+  },
+  "nodeGroups": [],
+  "id": "eUlOpiO3EN8Qpfd7",
+  "tags": []
+}

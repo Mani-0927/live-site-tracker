@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Scrape Wire</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg: #f6f4ef; --paper: #ffffff; --ink: #171412; --muted: #75695f; --hair: #e3ddd2;
+    --crimson: #c31c1c; --ok: #14705a; --ok-bg: #dff0ea; --warn: #a5680b; --warn-bg: #f7e7cf;
+    --err: #b31212; --err-bg: #fbdede;
+    --display: 'Archivo', sans-serif; --serif: 'Source Serif 4', serif; --mono: 'IBM Plex Mono', monospace;
+  }
+  body[data-theme="dark"]{
+    --bg: #14110d; --paper: #1d1a16; --ink: #f2ede4; --muted: #9c8f7f; --hair: #322c24;
+    --crimson: #e5544f; --ok: #4bc9a5; --ok-bg: #163430; --warn: #e0a53c; --warn-bg: #3a2e14;
+    --err: #ef6a63; --err-bg: #3a1917;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--serif); transition: background 0.2s, color 0.2s; }
+  a{ color:inherit; }
+
+  .ticker-bar{ background: var(--ink); color:var(--bg); overflow:hidden; white-space:nowrap; border-bottom: 1px solid #000; transition: background 0.2s, color 0.2s; }
+  .ticker-inner{ display:inline-flex; gap:48px; padding:8px 0; animation: tick 32s linear infinite; font-family: var(--mono); font-size:12px; letter-spacing:0.3px; }
+  .ticker-inner span.kicker{ color: var(--crimson); font-weight:600; margin-right:10px; }
+  @keyframes tick{ from{ transform:translateX(0);} to{ transform:translateX(-50%);} }
+  @media (prefers-reduced-motion: reduce){ .ticker-inner{ animation:none; } }
+
+  .masthead{
+    max-width: 1180px; margin:0 auto; padding: 26px 24px 18px; border-bottom: 4px solid var(--ink);
+    display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; position:relative;
+  }
+  .masthead .eyebrow{ font-family: var(--mono); font-size:11px; letter-spacing:2px; color:var(--crimson); text-transform:uppercase; font-weight:600; margin-bottom:6px; }
+  .masthead h1{ font-family: var(--display); font-weight:900; font-size: 46px; letter-spacing:-1px; margin:0; line-height:0.95; }
+  .masthead .tagline{ font-family: var(--serif); font-style:italic; color:var(--muted); font-size:14px; margin-top:6px; }
+  .masthead .meta-col{ text-align:right; font-family:var(--mono); font-size:11px; color:var(--muted); }
+  .masthead .meta-col .live-row{ display:flex; align-items:center; gap:6px; justify-content:flex-end; font-size:11px; color:var(--ok); font-weight:600; margin-bottom:4px; }
+  .masthead .meta-col .dot{ width:6px; height:6px; border-radius:50%; background:var(--ok); box-shadow:0 0 5px var(--ok); }
+
+  .icon-row{ position:absolute; top:26px; right:24px; display:flex; gap:8px; }
+  .icon-btn{
+    background:none; border:1px solid var(--hair); cursor:pointer; font-family:var(--mono); font-size:13px;
+    color:var(--muted); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover{ color:var(--ink); border-color:var(--muted); }
+  .icon-btn.active{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+
+  .settings-panel{ max-width:1180px; margin: 0 auto; padding: 0 24px; overflow:hidden; max-height:0; transition: max-height 0.25s ease, padding 0.25s ease; }
+  .settings-panel.open{ max-height:80px; padding: 14px 24px; }
+  .settings-inner{ display:flex; gap:10px; align-items:center; background:var(--paper); border:1px solid var(--hair); border-radius:6px; padding:10px 14px; }
+  .settings-inner label{ font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); white-space:nowrap; }
+  .settings-inner input{ flex:1; font-family:var(--mono); font-size:12px; padding:8px 10px; border:1px solid var(--hair); border-radius:4px; outline:none; background:var(--bg); color:var(--ink); }
+  .settings-inner input:focus{ border-color:var(--crimson); }
+  .settings-inner select{ font-family:var(--mono); font-size:11px; padding:8px; border:1px solid var(--hair); border-radius:4px; background:var(--bg); color:var(--ink); }
+  .settings-inner button{ font-family:var(--display); font-weight:800; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; background:var(--crimson); color:#fff; border:none; padding:9px 16px; border-radius:4px; cursor:pointer; }
+
+  /* toolbar: search + group toggle */
+  .toolbar{ max-width:1180px; margin: 18px auto 0; padding: 0 24px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .search-box{
+    flex:1; min-width:200px; display:flex; align-items:center; gap:8px; background:var(--paper); border:1px solid var(--hair);
+    border-radius:20px; padding:8px 16px;
+  }
+  .search-box input{ flex:1; border:none; outline:none; background:none; font-family:var(--mono); font-size:12.5px; color:var(--ink); }
+  .search-box .icon{ color:var(--muted); font-size:13px; }
+  .view-toggle{ display:flex; border:1px solid var(--hair); border-radius:20px; overflow:hidden; }
+  .view-toggle button{
+    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; padding:9px 16px;
+    background:var(--paper); color:var(--muted); border:none; cursor:pointer; transition: all 0.15s;
+  }
+  .view-toggle button.active{ background:var(--ink); color:var(--bg); }
+
+  .content{ max-width:1180px; margin: 26px auto 80px; padding: 0 24px; }
+
+  .empty-state{ text-align:center; padding: 90px 20px; color:var(--muted); border: 1px dashed var(--hair); border-radius:6px; background:var(--paper); }
+  .empty-state .big{ font-family:var(--display); font-weight:800; font-size:20px; color:var(--ink); margin-bottom:8px; }
+  .empty-state .small{ font-family:var(--mono); font-size:12px; }
+
+  .grid{ columns: 3 260px; column-gap: 22px; }
+  .grid.compact{ grid-template-columns: repeat(3, 1fr); }
+
+  .group-section{ margin-bottom: 34px; }
+  .group-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:14px; border-bottom:2px solid var(--ink); padding-bottom:8px; }
+  .group-head h3{ font-family:var(--display); font-weight:800; font-size:18px; margin:0; text-transform:uppercase; letter-spacing:0.3px; }
+  .group-head .count{ font-family:var(--mono); font-size:11px; color:var(--muted); }
+
+  .card{
+    background:var(--paper); border:1px solid var(--hair); border-radius:2px; padding: 18px; display:flex;
+    flex-direction:column; gap:10px; position:relative; text-decoration:none; color:inherit; cursor:pointer;
+    transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s; min-width:0; overflow:hidden;
+    break-inside: avoid; margin-bottom: 22px; width: 100%;
+  }
+  .card:hover{ box-shadow: 0 6px 18px rgba(0,0,0,0.12); transform: translateY(-2px); border-color:var(--muted); }
+  .card.lead{ column-span: all; padding: 26px; }
+  .card.lead .headline{ font-size: 30px; }
+  .card.lead .dek{ font-size: 16px; }
+  .card.solo{ column-span: all; max-width: 640px; margin: 0 auto; }
+  .read-more{ font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.6px; color:var(--crimson); opacity:0; transition:opacity 0.15s; }
+  .card:hover .read-more{ opacity:1; }
+
+  .bar{ position:absolute; left:0; top:0; bottom:0; width:4px; }
+  .bar.ok{ background:var(--ok); } .bar.empty{ background:var(--warn); } .bar.error{ background:var(--err); }
+
+  .card-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .kicker{ font-family:var(--mono); font-size:10px; letter-spacing:1.2px; text-transform:uppercase; font-weight:600; }
+  .kicker.ok{ color:var(--ok); } .kicker.empty{ color:var(--warn); } .kicker.error{ color:var(--err); }
+
+  .badge{ font-family:var(--mono); font-size:9px; padding:2px 7px; border-radius:2px; text-transform:uppercase; letter-spacing:0.5px; }
+  .badge.ok{ background:var(--ok-bg); color:var(--ok); }
+  .badge.empty{ background:var(--warn-bg); color:var(--warn); }
+  .badge.error{ background:var(--err-bg); color:var(--err); }
+
+  .headline{ font-family: var(--display); font-weight:800; font-size:20px; line-height:1.15; letter-spacing:-0.3px; overflow-wrap:anywhere; word-break:break-word; }
+  .dek{ font-family: var(--serif); font-style:italic; color:var(--muted); font-size:13.5px; line-height:1.4; }
+
+  .byline{ margin-top:auto; padding-top:10px; border-top:1px solid var(--hair); display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:10.5px; color:var(--muted); }
+  .byline .src{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .byline .read-more{ flex-shrink:0; margin-left:auto; }
+
+  .standby-note{ text-align:center; margin-top:22px; font-family:var(--mono); font-size:11px; color:var(--muted); }
+
+  footer{ max-width:1180px; margin: 0 auto 50px; padding: 18px 24px 0; border-top:1px solid var(--hair); font-family:var(--mono); font-size:10.5px; color:var(--muted); text-align:center; }
+
+  @media (max-width: 900px){ .grid{ columns: 2 260px; } }
+  @media (max-width: 600px){
+    .masthead h1{ font-size:32px; } .grid{ columns: 1; }
+    .masthead{ flex-direction:column; align-items:flex-start; } .masthead .meta-col{ text-align:left; }
+    .icon-row{ position:static; margin-bottom:10px; }
+    .toolbar{ flex-direction:column; align-items:stretch; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="ticker-bar">
+    <div class="ticker-inner" id="tickerInner">
+      <span><span class="kicker">LIVE</span>Watching for the next update…</span>
+      <span><span class="kicker">LIVE</span>Watching for the next update…</span>
+    </div>
+  </div>
+
+  <div class="masthead">
+    <div class="icon-row">
+      <button class="icon-btn" id="themeToggle" title="Toggle dark mode">☾</button>
+      <button class="icon-btn" id="settingsToggle" title="Feed settings">⚙</button>
+    </div>
+    <div class="title-block">
+      <div class="eyebrow">Automated Monitoring Edition</div>
+      <h1>THE SCRAPE WIRE</h1>
+      <div class="tagline">Every price, title and status change — filed the moment it happens.</div>
+    </div>
+    <div class="meta-col">
+      <div class="live-row"><span class="dot"></span><span id="statusText">Connecting…</span></div>
+      <div id="editionDate">—</div>
+      <div id="lastUpdated"></div>
+    </div>
+  </div>
+
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-inner">
+      <label>Feed URL</label>
+      <input id="webhookUrl" type="text" value="https://manisharma00.app.n8n.cloud/webhook/dashboard-data" />
+      <select id="intervalSelect">
+        <option value="30000">30s</option>
+        <option value="60000" selected>1 min</option>
+        <option value="180000">3 min</option>
+      </select>
+      <button id="connectBtn">Update</button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-box">
+      <span class="icon">🔍</span>
+      <input id="searchInput" type="text" placeholder="Search by site, field, or value…" />
+    </div>
+    <div class="view-toggle">
+      <button id="viewAll" class="active">All stories</button>
+      <button id="viewGrouped">By site</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="feedHost">
+      <div class="empty-state">
+        <div class="big">Loading the latest edition…</div>
+        <div class="small">Pulling the newest scrape results</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>THE SCRAPE WIRE — sourced live from your monitoring feed</footer>
+
+<script>
+  const CONFIG = { defaultUrl: 'https://manisharma00.app.n8n.cloud/webhook/dashboard-data', defaultIntervalMs: 60000 };
+
+  let pollTimer = null;
+  let lastRows = [];
+  let groupedView = false;
+  let searchTerm = '';
+
+  const els = {
+    url: document.getElementById('webhookUrl'),
+    interval: document.getElementById('intervalSelect'),
+    connectBtn: document.getElementById('connectBtn'),
+    statusText: document.getElementById('statusText'),
+    feedHost: document.getElementById('feedHost'),
+    lastUpdated: document.getElementById('lastUpdated'),
+    editionDate: document.getElementById('editionDate'),
+    tickerInner: document.getElementById('tickerInner'),
+    settingsToggle: document.getElementById('settingsToggle'),
+    settingsPanel: document.getElementById('settingsPanel'),
+    themeToggle: document.getElementById('themeToggle'),
+    searchInput: document.getElementById('searchInput'),
+    viewAll: document.getElementById('viewAll'),
+    viewGrouped: document.getElementById('viewGrouped'),
+  };
+
+  els.editionDate.textContent = new Date().toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+  els.settingsToggle.addEventListener('click', () => els.settingsPanel.classList.toggle('open'));
+
+  els.themeToggle.addEventListener('click', () => {
+    const isDark = document.body.getAttribute('data-theme') === 'dark';
+    document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    els.themeToggle.textContent = isDark ? '☾' : '☀';
+    els.themeToggle.classList.toggle('active', !isDark);
+  });
+
+  els.viewAll.addEventListener('click', () => { groupedView = false; els.viewAll.classList.add('active'); els.viewGrouped.classList.remove('active'); applyView(); });
+  els.viewGrouped.addEventListener('click', () => { groupedView = true; els.viewGrouped.classList.add('active'); els.viewAll.classList.remove('active'); applyView(); });
+  els.searchInput.addEventListener('input', (e) => { searchTerm = e.target.value.trim().toLowerCase(); applyView(); });
+
+  function setStatus(text, color){
+    els.statusText.textContent = text;
+    els.statusText.parentElement.style.color = color || '';
+    const dot = els.statusText.parentElement.querySelector('.dot');
+    dot.style.background = color || '';
+    dot.style.boxShadow = color ? '0 0 5px ' + color : '';
+  }
+
+  function escapeHtml(str){
+    if (str === null || str === undefined) return '';
+    return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+  }
+
+  function timeAgo(ts){
+    const then = new Date(ts).getTime();
+    if (isNaN(then)) return '';
+    const diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000));
+    if (diffSec < 60) return diffSec + 's ago';
+    const m = Math.floor(diffSec/60);
+    if (m < 60) return m + 'm ago';
+    const h = Math.floor(m/60);
+    if (h < 24) return h + 'h ago';
+    const d = Math.floor(h/24);
+    return d + 'd ago';
+  }
+
+  function domainOf(url){
+    try{ return new URL(url).hostname.replace('www.',''); }catch(e){ return url || 'unknown source'; }
+  }
+
+  function statusClass(status){
+    const s = (status||'').toLowerCase();
+    if (s === 'ok') return 'ok';
+    if (s === 'empty') return 'empty';
+    if (s === 'error') return 'error';
+    return 'empty';
+  }
+
+  function statusLabel(status){
+    const s = (status||'').toLowerCase();
+    if (s === 'ok') return 'CONFIRMED';
+    if (s === 'empty') return 'UNCERTAIN';
+    if (s === 'error') return 'FAILED';
+    return (status || 'UNKNOWN').toUpperCase();
+  }
+
+  function renderTicker(rows){
+    if (!rows.length){
+      els.tickerInner.innerHTML = `<span><span class="kicker">LIVE</span>Watching for the next update…</span>`.repeat(2);
+      return;
+    }
+    const items = rows.slice(0, 8).map(r =>
+      `<span><span class="kicker">${escapeHtml((r.field_name||'update').toUpperCase())}</span>${escapeHtml(r.value)} — ${escapeHtml(domainOf(r.source_url))}</span>`
+    );
+    els.tickerInner.innerHTML = items.concat(items).join('');
+  }
+
+  function cardHtml(r, variant){
+    const cls = statusClass(r.status);
+    const extraClass = variant ? ' ' + variant : '';
+    const href = escapeHtml(r.source_url || '#');
+    return `
+      <a class="card${extraClass}" href="${href}" target="_blank" rel="noopener noreferrer">
+        <div class="bar ${cls}"></div>
+        <div class="card-top">
+          <span class="kicker ${cls}">${escapeHtml(r.field_name || 'update')}</span>
+          <span class="badge ${cls}">${statusLabel(r.status)}</span>
+        </div>
+        <div class="headline">${escapeHtml(r.value) || '—'}</div>
+        <div class="dek">${escapeHtml(r.ai_summary) || 'No summary available for this update.'}</div>
+        <div class="byline">
+          <span class="src" title="${href}">${escapeHtml(domainOf(r.source_url))}</span>
+          <span class="read-more">Visit source →</span>
+          <span>${timeAgo(r.timestamp)}</span>
+        </div>
+      </a>
+    `;
+  }
+
+  function matchesSearch(r){
+    if (!searchTerm) return true;
+    const hay = [r.field_name, r.value, r.ai_summary, r.source_url, domainOf(r.source_url)]
+      .map(x => (x||'').toString().toLowerCase()).join(' ');
+    return hay.includes(searchTerm);
+  }
+
+  function renderAll(rows){
+    if (rows.length === 0){
+      els.feedHost.innerHTML = `
+        <div class="empty-state">
+          <div class="big">No matching stories</div>
+          <div class="small">Try a different search term, or clear the search box.</div>
+        </div>`;
+      return;
+    }
+    if (rows.length === 1){
+      els.feedHost.innerHTML = `<div class="grid">${cardHtml(rows[0], 'solo')}</div>
+        <div class="standby-note">More stories will appear here automatically as new changes are detected.</div>`;
+      return;
+    }
+    const [lead, ...rest] = rows;
+    els.feedHost.innerHTML = `<div class="grid">${cardHtml(lead,'lead') + rest.map(r=>cardHtml(r)).join('')}</div>`;
+  }
+
+  function renderGrouped(rows){
+    if (rows.length === 0){
+      els.feedHost.innerHTML = `
+        <div class="empty-state">
+          <div class="big">No matching stories</div>
+          <div class="small">Try a different search term, or clear the search box.</div>
+        </div>`;
+      return;
+    }
+    const groups = {};
+    rows.forEach(r => {
+      const d = domainOf(r.source_url);
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(r);
+    });
+    const domains = Object.keys(groups).sort((a,b) => groups[b].length - groups[a].length);
+    const html = domains.map(d => `
+      <div class="group-section">
+        <div class="group-head"><h3>${escapeHtml(d)}</h3><span class="count">${groups[d].length} ${groups[d].length===1?'story':'stories'}</span></div>
+        <div class="grid compact">${groups[d].map(r => cardHtml(r)).join('')}</div>
+      </div>
+    `).join('');
+    els.feedHost.innerHTML = html;
+  }
+
+  function applyView(){
+    const filtered = lastRows.filter(matchesSearch);
+    const sorted = [...filtered].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+    renderTicker(sorted);
+    if (groupedView) renderGrouped(sorted); else renderAll(sorted);
+  }
+
+  async function fetchData(){
+    const url = els.url.value.trim();
+    if (!url){ setStatus('No feed set', 'var(--err)'); return; }
+    try{
+      const res = await fetch(url, { method: 'GET' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      lastRows = Array.isArray(data) ? data : [];
+      applyView();
+      setStatus('Live', 'var(--ok)');
+      els.lastUpdated.textContent = 'Updated ' + new Date().toLocaleTimeString();
+    }catch(err){
+      setStatus('Connection issue', 'var(--err)');
+      els.feedHost.innerHTML = `
+        <div class="empty-state">
+          <div class="big">Couldn't reach the feed</div>
+          <div class="small">${escapeHtml(err.message)} — will retry automatically</div>
+        </div>`;
+    }
+  }
+
+  function restartPolling(){
+    if (pollTimer) clearInterval(pollTimer);
+    const ms = parseInt(els.interval.value, 10) || CONFIG.defaultIntervalMs;
+    pollTimer = setInterval(fetchData, ms);
+  }
+
+  els.connectBtn.addEventListener('click', () => { fetchData(); restartPolling(); els.settingsPanel.classList.remove('open'); });
+  els.interval.addEventListener('change', restartPolling);
+  els.url.addEventListener('keydown', (e) => { if (e.key === 'Enter'){ fetchData(); restartPolling(); } });
+
+  window.addEventListener('DOMContentLoaded', () => {
+    if (!els.url.value) els.url.value = CONFIG.defaultUrl;
+    fetchData();
+    restartPolling();
+  });
+</script>
+</body>
+</html>
