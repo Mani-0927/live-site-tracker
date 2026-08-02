@@ -41,7 +41,10 @@ An automated web monitoring system that tracks specific data (price, stock statu
 
 ## 🔗 Live Demo
 
-<img width="1915" height="952" alt="image" src="https://github.com/user-attachments/assets/bd93c367-0604-435d-9a9f-996ffe8974b1" />
+view live dashboard - https://live-site-tracker.onrender.com
+
+<img width="1908" height="969" alt="image" src="https://github.com/user-attachments/assets/9fc0f33c-69ba-440d-9c06-49f3e1e7732b" />
+
 <img width="839" height="772" alt="image" src="https://github.com/user-attachments/assets/827374e1-a0ff-4ab0-b9ac-a0bae5e444d5" />
 
 ## 📌 Note
